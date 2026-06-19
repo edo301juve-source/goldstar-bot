@@ -1,12 +1,14 @@
 import logging
 import asyncio
+import json
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ===== CONFIGURAZIONE =====
-BOT_TOKEN = "8965705356:AAELiw-rA3a7XGLqp2fHWiO7su7M7K6rsIQ"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 LEAD_GROUP_ID = -5322857475
-MINI_APP_URL = "https://TUO_USERNAME.github.io/goldstar-webapp/"  # da aggiornare dopo
+MINI_APP_URL = "https://edo301juve-source.github.io/goldstar-bot/"
 
 # ===== LOGGING =====
 logging.basicConfig(level=logging.INFO)
@@ -38,14 +40,11 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = update.effective_user
     data = update.message.web_app_data.data
 
-    # Parse dei dati JSON dalla mini app
-    import json
     try:
         lead = json.loads(data)
     except:
         lead = {"raw": data}
 
-    # Costruzione messaggio lead
     username = f"@{user.username}" if user.username else f"ID: {user.id}"
     nome = user.first_name or "N/D"
     if user.last_name:
@@ -57,7 +56,6 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
     servizio = lead.get("servizio", "N/D")
     note = lead.get("note", "") or "—"
 
-    # Se minorenne, non mandare il lead
     if eta == "minorenne":
         await update.message.reply_text(
             "❌ Spiacenti, i nostri servizi sono riservati ai maggiorenni."
@@ -74,14 +72,12 @@ async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"📝 Note: {note}"
     )
 
-    # Manda al gruppo lead
     await context.bot.send_message(
         chat_id=LEAD_GROUP_ID,
         text=messaggio,
         parse_mode="Markdown"
     )
 
-    # Conferma all'utente
     await update.message.reply_text(
         "✅ Perfetto! Il nostro team ti contatterà a breve su Telegram.\n\n"
         "Nel frattempo puoi seguire il canale per restare aggiornato. ⭐"
@@ -92,9 +88,8 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
-    
     logger.info("Bot avviato...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
