@@ -1,18 +1,81 @@
 import logging
 import asyncio
-import json
-import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import threading
+from flask import Flask, request, jsonify
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ===== CONFIGURAZIONE =====
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+BOT_TOKEN = "8965705356:AAELiw-rA3a7XGLqp2fHWiO7su7M7K6rsIQ"
 LEAD_GROUP_ID = -5322857475
 MINI_APP_URL = "https://edo301juve-source.github.io/goldstar-bot/"
 
 # ===== LOGGING =====
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ===== FLASK APP =====
+flask_app = Flask(__name__)
+
+# Loop asyncio condiviso tra Flask e il bot
+main_loop = None
+
+@flask_app.route("/", methods=["GET"])
+def home():
+    return "GoldStar Bot Online ✅", 200
+
+@flask_app.route("/lead", methods=["POST"])
+def receive_lead():
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data"}), 400
+
+    maggiorenne = data.get("maggiorenne", "N/D")
+    esperienza = data.get("esperienza", "N/D")
+    budget = data.get("budget", "N/D")
+    servizio = data.get("servizio", "N/D")
+    domande = data.get("domande", "—")
+    username = data.get("username", "")
+    user_id = data.get("user_id", "")
+
+    if username:
+        contatto = f"@{username}"
+    elif user_id:
+        contatto = f"[Scrivi qui](tg://user?id={user_id})"
+    else:
+        contatto = "Non disponibile"
+
+    messaggio = (
+        f"🌟 *NUOVO LEAD GOLDSTAR*\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👤 *Contatto:* {contatto}\n"
+        f"✅ *Maggiorenne:* {maggiorenne}\n"
+        f"📊 *Esperienza:* {esperienza}\n"
+        f"💰 *Budget:* {budget}\n"
+        f"🎯 *Interesse:* {servizio}\n"
+        f"💬 *Note:* {domande}\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
+
+    # Invia il messaggio usando il loop asyncio del bot
+    future = asyncio.run_coroutine_threadsafe(
+        send_telegram(messaggio), main_loop
+    )
+    try:
+        future.result(timeout=10)
+    except Exception as e:
+        logger.error(f"Errore invio Telegram: {e}")
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"status": "ok"}), 200
+
+async def send_telegram(text):
+    bot = Bot(token=BOT_TOKEN)
+    await bot.send_message(
+        chat_id=LEAD_GROUP_ID,
+        text=text,
+        parse_mode="Markdown"
+    )
 
 # ===== COMANDO /start =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -21,75 +84,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [[
         InlineKeyboardButton(
-            "🚀 Inizia la qualifica",
+            "🚀 Accedi ai servizi VIP",
             web_app=WebAppInfo(url=MINI_APP_URL)
         )
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        f"👋 Ciao {first_name}! Sono *GoldStarEntryBot*.\n\n"
-        "Ti guiderò nell'attivazione dei servizi esclusivi. "
-        "Rispondi a qualche domanda per trovare quello più adatto a te 👇",
+        f"👋 Ciao {first_name}!\n\n"
+        f"Benvenuto in *GoldStar* ⭐\n\n"
+        f"Compila il form per essere contattato dal nostro team e accedere ai servizi VIP.",
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
 
-# ===== RICEZIONE DATI DALLA MINI APP =====
-async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    data = update.message.web_app_data.data
-
-    try:
-        lead = json.loads(data)
-    except:
-        lead = {"raw": data}
-
-    username = f"@{user.username}" if user.username else f"ID: {user.id}"
-    nome = user.first_name or "N/D"
-    if user.last_name:
-        nome += f" {user.last_name}"
-
-    eta = lead.get("eta", "N/D")
-    esperienza = lead.get("esperienza", "N/D")
-    budget = lead.get("budget", "N/D")
-    servizio = lead.get("servizio", "N/D")
-    note = lead.get("note", "") or "—"
-
-    if eta == "minorenne":
-        await update.message.reply_text(
-            "❌ Spiacenti, i nostri servizi sono riservati ai maggiorenni."
-        )
-        return
-
-    messaggio = (
-        f"🆕 *Nuovo lead qualificato*\n\n"
-        f"👤 Nome: {nome}\n"
-        f"📱 Telegram: {username}\n"
-        f"🎯 Esperienza: {esperienza}\n"
-        f"💰 Budget: {budget}\n"
-        f"📦 Servizio: {servizio}\n"
-        f"📝 Note: {note}"
-    )
-
-    await context.bot.send_message(
-        chat_id=LEAD_GROUP_ID,
-        text=messaggio,
-        parse_mode="Markdown"
-    )
-
-    await update.message.reply_text(
-        "✅ Perfetto! Il nostro team ti contatterà a breve su Telegram.\n\n"
-        "Nel frattempo puoi seguire il canale per restare aggiornato. ⭐"
-    )
-
 # ===== MAIN =====
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
-    logger.info("Bot avviato...")
-    app.run_polling(drop_pending_updates=True)
+async def run_bot():
+    application = Application.builder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    # Tieni il bot attivo indefinitamente
+    await asyncio.Event().wait()
+
+def start_flask():
+    flask_app.run(host="0.0.0.0", port=5000, use_reloader=False)
 
 if __name__ == "__main__":
-    main()
+    # Crea il loop principale
+    main_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(main_loop)
+
+    # Avvia Flask in un thread separato
+    flask_thread = threading.Thread(target=start_flask, daemon=True)
+    flask_thread.start()
+
+    # Avvia il bot nel loop principale
+    main_loop.run_until_complete(run_bot())
