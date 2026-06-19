@@ -1,24 +1,39 @@
 import logging
-import asyncio
+import os
 import threading
+import asyncio
 from flask import Flask, request, jsonify
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Bot
-from telegram.ext import Application, CommandHandler, ContextTypes
+import httpx
 
 # ===== CONFIGURAZIONE =====
 BOT_TOKEN = "8965705356:AAELiw-rA3a7XGLqp2fHWiO7su7M7K6rsIQ"
 LEAD_GROUP_ID = -5322857475
 MINI_APP_URL = "https://edo301juve-source.github.io/goldstar-bot/"
+TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# ===== LOGGING =====
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ===== FLASK APP =====
+# ===== FLASK =====
 flask_app = Flask(__name__)
 
-# Loop asyncio condiviso tra Flask e il bot
-main_loop = None
+def send_telegram_sync(text):
+    """Invia messaggio Telegram in modo sincrono tramite httpx"""
+    try:
+        r = httpx.post(
+            f"{TELEGRAM_API}/sendMessage",
+            json={
+                "chat_id": LEAD_GROUP_ID,
+                "text": text,
+                "parse_mode": "Markdown"
+            },
+            timeout=10
+        )
+        logger.info(f"Telegram response: {r.status_code} {r.text}")
+        return r.status_code == 200
+    except Exception as e:
+        logger.error(f"Errore invio Telegram: {e}")
+        return False
 
 @flask_app.route("/", methods=["GET"])
 def home():
@@ -31,12 +46,12 @@ def receive_lead():
         return jsonify({"error": "No data"}), 400
 
     maggiorenne = data.get("maggiorenne", "N/D")
-    esperienza = data.get("esperienza", "N/D")
-    budget = data.get("budget", "N/D")
-    servizio = data.get("servizio", "N/D")
-    domande = data.get("domande", "—")
-    username = data.get("username", "")
-    user_id = data.get("user_id", "")
+    esperienza  = data.get("esperienza", "N/D")
+    budget      = data.get("budget", "N/D")
+    servizio    = data.get("servizio", "N/D")
+    domande     = data.get("domande", "—")
+    username    = data.get("username", "")
+    user_id     = data.get("user_id", "")
 
     if username:
         contatto = f"@{username}"
@@ -57,68 +72,63 @@ def receive_lead():
         f"━━━━━━━━━━━━━━━━━━"
     )
 
-    # Invia il messaggio usando il loop asyncio del bot
-    future = asyncio.run_coroutine_threadsafe(
-        send_telegram(messaggio), main_loop
-    )
+    ok = send_telegram_sync(messaggio)
+    if ok:
+        return jsonify({"status": "ok"}), 200
+    else:
+        return jsonify({"error": "Telegram send failed"}), 500
+
+# ===== BOT POLLING (thread separato) =====
+def run_polling():
+    """Polling semplice con httpx - nessuna dipendenza da python-telegram-bot"""
+    offset = None
+    logger.info("Bot polling avviato")
+    while True:
+        try:
+            params = {"timeout": 30}
+            if offset:
+                params["offset"] = offset
+            r = httpx.get(f"{TELEGRAM_API}/getUpdates", params=params, timeout=35)
+            updates = r.json().get("result", [])
+            for upd in updates:
+                offset = upd["update_id"] + 1
+                msg = upd.get("message", {})
+                text = msg.get("text", "")
+                chat_id = msg.get("chat", {}).get("id")
+                first_name = msg.get("from", {}).get("first_name", "trader")
+                if text == "/start" and chat_id:
+                    send_start(chat_id, first_name)
+        except Exception as e:
+            logger.error(f"Polling error: {e}")
+            import time; time.sleep(5)
+
+def send_start(chat_id, first_name):
+    """Manda il messaggio /start con bottone mini app"""
+    payload = {
+        "chat_id": chat_id,
+        "text": (
+            f"👋 Ciao {first_name}\\!\n\n"
+            f"Benvenuto in *GoldStar* ⭐\n\n"
+            f"Compila il form per essere contattato dal nostro team e accedere ai servizi VIP\\."
+        ),
+        "parse_mode": "MarkdownV2",
+        "reply_markup": {
+            "inline_keyboard": [[
+                {
+                    "text": "🚀 Accedi ai servizi VIP",
+                    "web_app": {"url": MINI_APP_URL}
+                }
+            ]]
+        }
+    }
     try:
-        future.result(timeout=10)
+        httpx.post(f"{TELEGRAM_API}/sendMessage", json=payload, timeout=10)
     except Exception as e:
-        logger.error(f"Errore invio Telegram: {e}")
-        return jsonify({"error": str(e)}), 500
-
-    return jsonify({"status": "ok"}), 200
-
-async def send_telegram(text):
-    bot = Bot(token=BOT_TOKEN)
-    await bot.send_message(
-        chat_id=LEAD_GROUP_ID,
-        text=text,
-        parse_mode="Markdown"
-    )
-
-# ===== COMANDO /start =====
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    first_name = user.first_name or "trader"
-
-    keyboard = [[
-        InlineKeyboardButton(
-            "🚀 Accedi ai servizi VIP",
-            web_app=WebAppInfo(url=MINI_APP_URL)
-        )
-    ]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text(
-        f"👋 Ciao {first_name}!\n\n"
-        f"Benvenuto in *GoldStar* ⭐\n\n"
-        f"Compila il form per essere contattato dal nostro team e accedere ai servizi VIP.",
-        parse_mode="Markdown",
-        reply_markup=reply_markup
-    )
-
-# ===== MAIN =====
-async def run_bot():
-    application = Application.builder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    # Tieni il bot attivo indefinitamente
-    await asyncio.Event().wait()
-
-def start_flask():
-    flask_app.run(host="0.0.0.0", port=5000, use_reloader=False)
+        logger.error(f"Errore send_start: {e}")
 
 if __name__ == "__main__":
-    # Crea il loop principale
-    main_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(main_loop)
-
-    # Avvia Flask in un thread separato
-    flask_thread = threading.Thread(target=start_flask, daemon=True)
-    flask_thread.start()
-
-    # Avvia il bot nel loop principale
-    main_loop.run_until_complete(run_bot())
+    # Avvia il polling in background
+    t = threading.Thread(target=run_polling, daemon=True)
+    t.start()
+    # Avvia Flask
+    flask_app.run(host="0.0.0.0", port=5000, use_reloader=False)
