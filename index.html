@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GoldStar | Qualifica</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #ffffff;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #f0b429, #e07b00);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .logo-text { font-weight: 700; font-size: 15px; }
+  .logo-sub { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+  .badge-qualifica {
+    background: #7c3aed;
+    color: white;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .progress-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .progress-seg {
+    flex: 1; height: 4px;
+    background: #2a2d3a;
+    border-radius: 2px;
+    transition: background 0.3s;
+  }
+  .progress-seg.active { background: #3b82f6; }
+  .step-label {
+    font-size: 12px;
+    color: #7c3aed;
+    font-weight: 700;
+    margin-bottom: 24px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #1e2130;
+    border: none;
+    color: #aaa;
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    margin-bottom: 20px;
+  }
+  h2 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+  .subtitle { font-size: 14px; color: #888; margin-bottom: 28px; }
+  .option {
+    background: #1a1d2a;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .option:hover { border-color: #3b82f6; background: #1e2235; }
+  .option.selected { border-color: #3b82f6; background: #1e2235; }
+  .option-title { font-weight: 700; font-size: 16px; }
+  .option-sub { font-size: 13px; color: #666; margin-top: 3px; }
+  .btn-continua {
+    width: 100%;
+    padding: 18px;
+    background: #2a2d3a;
+    color: #555;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: not-allowed;
+    margin-top: 20px;
+    transition: all 0.3s;
+  }
+  .btn-continua.active {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    cursor: pointer;
+  }
+  .btn-invia {
+    width: 100%;
+    padding: 18px;
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 20px;
+  }
+  textarea {
+    width: 100%;
+    background: #1a1d2a;
+    border: 2px solid #2a2d3a;
+    border-radius: 14px;
+    padding: 16px;
+    color: white;
+    font-size: 15px;
+    min-height: 130px;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+  }
+  textarea:focus { border-color: #3b82f6; }
+  .step { display: none; }
+  .step.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⭐</div>
+    <div>
+      <div class="logo-text">Assistente</div>
+      <div class="logo-sub">Qualifica</div>
+    </div>
+  </div>
+  <div class="badge-qualifica">Qualifica</div>
+</div>
+
+<div class="progress-bar" id="progressBar">
+  <div class="progress-seg active"></div>
+  <div class="progress-seg"></div>
+  <div class="progress-seg"></div>
+  <div class="progress-seg"></div>
+  <div class="progress-seg"></div>
+</div>
+<div class="step-label" id="stepLabel">QUALIFICA • Step 1 di 5</div>
+
+<!-- STEP 1: Età -->
+<div class="step active" id="step1">
+  <h2>Sei maggiorenne?</h2>
+  <p class="subtitle">I nostri servizi sono riservati ai maggiorenni.</p>
+  <div class="option" onclick="selectOption(this, 'eta', 'maggiorenne')">
+    <div class="option-title">Sì, ho compiuto 18 anni</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'eta', 'minorenne')">
+    <div class="option-title">No, sono minorenne</div>
+  </div>
+  <button class="btn-continua" id="btn1" onclick="nextStep(2)">Continua</button>
+</div>
+
+<!-- STEP 2: Esperienza -->
+<div class="step" id="step2">
+  <button class="back-btn" onclick="prevStep(1)">← Indietro</button>
+  <h2>Che esperienza hai nel trading?</h2>
+  <p class="subtitle">Ti guidiamo al servizio più adatto.</p>
+  <div class="option" onclick="selectOption(this, 'esperienza', 'Nessuna esperienza')">
+    <div class="option-title">Nessuna esperienza</div>
+    <div class="option-sub">Completamente nuovo</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'esperienza', 'Base')">
+    <div class="option-title">Base</div>
+    <div class="option-sub">Conosco i fondamentali</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'esperienza', 'Intermedia o Avanzata')">
+    <div class="option-title">Intermedia o Avanzata</div>
+    <div class="option-sub">Ho già operato sui mercati</div>
+  </div>
+  <button class="btn-continua" id="btn2" onclick="nextStep(3)">Continua</button>
+</div>
+
+<!-- STEP 3: Budget -->
+<div class="step" id="step3">
+  <button class="back-btn" onclick="prevStep(2)">← Indietro</button>
+  <h2>Qual è il tuo budget?</h2>
+  <p class="subtitle">Indicativo, per consigliarti meglio.</p>
+  <div class="option" onclick="selectOption(this, 'budget', '150-500 EUR')">
+    <div class="option-title">150 – 500 EUR</div>
+    <div class="option-sub">Entry level</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'budget', '500-1500 EUR')">
+    <div class="option-title">500 – 1.500 EUR</div>
+    <div class="option-sub">Intermedio</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'budget', '1500-5000 EUR')">
+    <div class="option-title">1.500 – 5.000 EUR</div>
+    <div class="option-sub">Avanzato</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'budget', '5000+ EUR')">
+    <div class="option-title">5.000+ EUR</div>
+    <div class="option-sub">Premium</div>
+  </div>
+  <button class="btn-continua" id="btn3" onclick="nextStep(4)">Continua</button>
+</div>
+
+<!-- STEP 4: Servizio -->
+<div class="step" id="step4">
+  <button class="back-btn" onclick="prevStep(3)">← Indietro</button>
+  <h2>Quale servizio ti interessa?</h2>
+  <p class="subtitle">Puoi approfondire con il team.</p>
+  <div class="option" onclick="selectOption(this, 'servizio', 'Copy Trading')">
+    <div class="option-title">Copy Trading</div>
+    <div class="option-sub">Copia automaticamente i trader professionisti</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'servizio', 'Segnali VIP')">
+    <div class="option-title">Segnali VIP</div>
+    <div class="option-sub">Ricevi segnali in tempo reale</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'servizio', 'Trading Autonomo')">
+    <div class="option-title">Trading Autonomo</div>
+    <div class="option-sub">Opero in autonomia</div>
+  </div>
+  <div class="option" onclick="selectOption(this, 'servizio', 'Info Generali')">
+    <div class="option-title">Info Generali</div>
+    <div class="option-sub">Voglio sapere di più</div>
+  </div>
+  <button class="btn-continua" id="btn4" onclick="nextStep(5)">Continua</button>
+</div>
+
+<!-- STEP 5: Note -->
+<div class="step" id="step5">
+  <button class="back-btn" onclick="prevStep(4)">← Indietro</button>
+  <h2>Hai domande specifiche?</h2>
+  <p class="subtitle">Facoltativo — il team le leggerà prima di contattarti.</p>
+  <textarea id="noteInput" placeholder="Scrivi qui..."></textarea>
+  <p style="font-size:12px;color:#555;margin-top:8px;">Puoi lasciare vuoto</p>
+  <button class="btn-invia" onclick="invia()">Invia</button>
+</div>
+
+<script>
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+
+  let currentStep = 1;
+  const answers = { eta: '', esperienza: '', budget: '', servizio: '', note: '' };
+
+  function selectOption(el, field, value) {
+    const parent = el.parentElement;
+    parent.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    answers[field] = value;
+    const btn = document.getElementById('btn' + currentStep);
+    if (btn) { btn.classList.add('active'); }
+  }
+
+  function nextStep(n) {
+    const btn = document.getElementById('btn' + currentStep);
+    if (!btn || !btn.classList.contains('active')) return;
+
+    // Blocca minorenni
+    if (currentStep === 1 && answers.eta === 'minorenne') {
+      alert('Spiacenti, i nostri servizi sono riservati ai maggiorenni.');
+      return;
+    }
+
+    document.getElementById('step' + currentStep).classList.remove('active');
+    currentStep = n;
+    document.getElementById('step' + n).classList.add('active');
+    updateProgress(n);
+  }
+
+  function prevStep(n) {
+    document.getElementById('step' + currentStep).classList.remove('active');
+    currentStep = n;
+    document.getElementById('step' + n).classList.add('active');
+    updateProgress(n);
+  }
+
+  function updateProgress(n) {
+    document.getElementById('stepLabel').textContent = `QUALIFICA • Step ${n} di 5`;
+    const segs = document.querySelectorAll('.progress-seg');
+    segs.forEach((s, i) => {
+      s.classList.toggle('active', i < n);
+    });
+  }
+
+  function invia() {
+    answers.note = document.getElementById('noteInput').value.trim();
+    tg.sendData(JSON.stringify(answers));
+  }
+</script>
+</body>
+</html>
